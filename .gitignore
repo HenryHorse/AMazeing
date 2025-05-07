@@ -1,0 +1,9 @@
+# Bytecode cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+
+# OS-specific
+.DS_Store

@@ -1,5 +1,5 @@
 import pygame
-
+import time
 
 
 def draw_maze(screen, maze, rows, cols):
@@ -38,3 +38,39 @@ def run_visualization(maze, rows, cols):
                 running = False
 
     pygame.quit()
+
+
+def run_mutating_visualization(initial_maze, rows, cols, mutator, steps=20, interval_sec=3): 
+    pygame.init()
+
+    screen_width = 600
+    screen_height = 600
+    screen = pygame.display.set_mode((screen_width, screen_height))
+    pygame.display.set_caption("Live Maze Visualization")
+
+    maze = initial_maze.copy()
+    clock = pygame.time.Clock()
+    last_update_time = time.time()
+    t = 0
+
+    running = True
+    while running and t < steps:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                running = False
+
+        current_time = time.time()
+        if current_time - last_update_time >= interval_sec:
+            print(f"Timestep {t}: Mutating...")
+            maze = mutator.mutate(maze, timestep=t)
+            t += 1
+            last_update_time = current_time
+
+        draw_maze(screen, maze, rows, cols)
+        pygame.display.flip()
+        clock.tick(60)
+
+    pygame.quit()
+
