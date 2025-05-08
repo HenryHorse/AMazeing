@@ -1,2 +1,6 @@
 numpy==2.2.5
 pygame==2.6.1
+
+# Tyler: I used these since the ones above couldnt be installed for me and this worked too!
+numpy==1.24.4 
+pygame==2.6.1
