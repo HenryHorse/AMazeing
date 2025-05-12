@@ -1,5 +1,5 @@
 from stable_baselines3 import PPO
-from maze_mutation_env import MazeMutationEnv
+from models.mutator.maze_mutation_env import MazeMutationEnv
 
 env = MazeMutationEnv(rows=10, cols=10)
 model = PPO("MlpPolicy", env, verbose=1)

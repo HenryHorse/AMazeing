@@ -2,7 +2,7 @@ import gym
 import numpy as np
 from gym import spaces
 from models.generator import generate_random_maze
-from models.mutator import is_solvable
+from models.random_mutator import is_solvable
 
 class MazeMutationEnv(gym.Env):
     """
