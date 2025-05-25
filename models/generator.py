@@ -68,3 +68,27 @@ def generate_maze_dfs_backtracker(num_rows, num_cols):
     # Crop or pad back to desired size (Ideally not needed since params shuld have odd rows and cols.)
     return np.array(maze)[:num_rows, :num_cols], (1, 1), goal
 
+
+def prim_algo(num_rows, num_cols):
+    maze = [[1 for _ in range(num_cols)] for _ in range(num_rows)]
+    last_cell = (0, 0)
+
+    cardinal_directions = [(2,0), (-2,0), (0,2), (0,-2)]
+
+    walls = [(1,1,dx,dy) for dx,dy in cardinal_directions]     # add starting node to the list
+
+    while walls:
+        rand_idx = np.random.choice(len(walls))
+        x,y,dx,dy = walls.pop(rand_idx)
+        nx,ny = x+dx, y+dy
+        print(f"x: {x}, y: {y}, nx: {nx}, ny:{ny}")
+
+        if 0 <= nx < num_rows - 1 and 0 <= ny < num_cols - 1 and maze[nx][ny] == 1:
+            maze[nx][ny] = 0    # make a new open cell
+            last_cell = (nx,ny)
+            maze[x+dx//2][y+dy//2] = 0      # carve path to the new opening
+            for new_dx, new_dy in cardinal_directions:
+                walls.append((nx, ny, new_dx, new_dy))
+
+    return maze, (1,1), last_cell
+
