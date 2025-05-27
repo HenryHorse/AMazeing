@@ -16,5 +16,6 @@ def main():
     print("Initial maze is solvable. Starting live viewer...")
     run_mutating_visualization(maze, rows, cols, mutator, steps=20, interval_sec=3)
 
+
 if __name__ == "__main__":
     main()
