@@ -1,13 +1,21 @@
-from models.generator import generate_random_maze, generate_maze_dfs_backtracker, prim_algo
-from visualize import run_visualization
+from models.generator import generate_random_maze
+from models.mutator import MazeMutator, is_solvable
+from visualize import run_mutating_visualization
+
+def generate_solvable_maze(rows, cols, max_attempts=100):
+    for _ in range(max_attempts):
+        maze = generate_random_maze(rows, cols)
+        if is_solvable(maze, start=(0, 0), goal=(rows - 1, cols - 1)):
+            return maze
+    raise RuntimeError("Could not generate a solvable maze after many attempts.")
 
 def main():
-    num_rows, num_cols = 21, 21
-    maze, start, goal = prim_algo(num_rows, num_cols)
-    print(maze)
-    print(f"Start: {start}")
-    print(f"Goal: {goal}")
-    run_visualization(maze, num_rows, num_cols)
+    rows, cols = 10, 10
+    mutator = MazeMutator()
+    maze = generate_solvable_maze(rows, cols)
+    print("Initial maze is solvable. Starting live viewer...")
+    run_mutating_visualization(maze, rows, cols, mutator, steps=20, interval_sec=3)
+
 
 if __name__ == "__main__":
     main()
