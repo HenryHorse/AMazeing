@@ -3,6 +3,30 @@ import numpy as np
 from gym import spaces
 from models.generator import generate_random_maze
 from models.random_mutator import is_solvable
+import networkx as nx
+
+
+def solver_path_length(maze, start=(0, 0), goal=None):
+        if goal is None:
+            goal = (maze.shape[0] - 1, maze.shape[1] - 1)
+
+        G = nx.Graph()
+        rows, cols = maze.shape
+        for r in range(rows):
+            for c in range(cols):
+                if maze[r][c] == 0:
+                    for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < rows and 0 <= nc < cols and maze[nr][nc] == 0:
+                            G.add_edge((r, c), (nr, nc))
+
+        try:
+            path = nx.shortest_path(G, start, goal)
+            return len(path)
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            return None  # unsolvable
+
+
 
 class MazeMutationEnv(gym.Env):
     """
@@ -24,6 +48,7 @@ class MazeMutationEnv(gym.Env):
 
         self.maze = None
         self.reset()
+    
 
     def reset(self):
         self.maze = self._generate_solvable_maze()
@@ -37,20 +62,22 @@ class MazeMutationEnv(gym.Env):
         reward = 0
         done = False
 
-        # Only move if from_pos is wall and to_pos is path
+        prev_len = solver_path_length(self.maze)
+    
         if self.maze[from_pos] == 1 and self.maze[to_pos] == 0:
             self.maze[from_pos] = 0
             self.maze[to_pos] = 1
 
-            if is_solvable(self.maze):
-                reward = 1
-            else:
+            new_len = solver_path_length(self.maze)
+            if new_len is None:
                 reward = -10
-                # Revert move
                 self.maze[from_pos] = 1
                 self.maze[to_pos] = 0
+            else:
+                reward = new_len - prev_len  # positive if path got longer
         else:
-            reward = -1  # invalid move
+            reward = -1
+
 
         return self.maze.flatten(), reward, done, {}
 
