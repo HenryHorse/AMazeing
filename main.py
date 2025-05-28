@@ -1,5 +1,5 @@
 from models.generator import generate_random_maze
-from models.mutator import MazeMutator, is_solvable
+from models.random_mutator import MazeMutator, is_solvable
 from visualize import run_mutating_visualization
 
 def generate_solvable_maze(rows, cols, max_attempts=100):
