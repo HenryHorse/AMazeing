@@ -92,30 +92,48 @@ def maze_to_hetero_graph(maze, agent_pos):
 
 
 class GNNSolverPolicy(nn.Module):
-    def __init__(self, hidden_dim=64):
+    def __init__(self, input_dim = 4, hidden_dim=64):
         super().__init__()
-        self.convs = gnn.HeteroConv({
-            ('cell', 'to', 'cell'): gnn.GATConv(1, hidden_dim, add_self_loops=False),
-            ('wall', 'to', 'cell'): gnn.GATConv(1, hidden_dim, add_self_loops=False),
-        }, aggr='sum')
+        # self.convs = gnn.HeteroConv({
+        #     ('cell', 'to', 'cell'): gnn.GATConv(1, hidden_dim, add_self_loops=False),
+        #     ('wall', 'to', 'cell'): gnn.GATConv(1, hidden_dim, add_self_loops=False),
+        # }, aggr='sum')
+        self.gcn1 = gnn.GCNConv(input_dim, hidden_dim)
+        self.gcn2 = gnn.GCNConv(hidden_dim, hidden_dim)
         self.policy_head = nn.Linear(hidden_dim, 4)
 
     def forward(self, data):
-        x_dict = self.convs(data.x_dict, data.edge_index_dict)
+        x, edge_index = data.x, data.edge_index
+        x = F.relu(self.gcn1(x, edge_index))
+        x = F.relu(self.gcn2(x, edge_index))
 
-        agent_idx = (data['cell'].x[:, 0] == 1.0).nonzero(as_tuple=True)[0]
-        agent_embed = x_dict['cell'][agent_idx]
+        agent_idx = (data.x[:, 1] == 1.0).nonzero(as_tuple=True)[0]
+
+        agent_embed = x[agent_idx]
+
+        # x_dict = self.convs(data.x_dict, data.edge_index_dict)
+        # agent_idx = (data['cell'].x[:, 0] == 1.0).nonzero(as_tuple=True)[0]
+        # agent_embed = x_dict['cell'][agent_idx]
 
         return self.policy_head(agent_embed).squeeze(0)
 
 
 class GNNSolverAgent:
-    def __init__(self, lr=1e-3):
+    def __init__(self, lr=1e-3, gamma=0.99, model_path="solver.pt"):
         self.policy = GNNSolverPolicy()
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr)
+        self.gamma = gamma
+        self.model_path = model_path
+
+    def save(self):
+        torch.save(self.policy.state_dict(), self.model_path)
+
+    def load(self):
+        self.policy.load_state_dict(torch.load(self.model_path))
+        self.policy.eval()
 
     def select_action(self, maze, pos):
-        graph = maze_to_hetero_graph(maze, pos)
+        graph = maze_to_homogeneous_graph(maze, pos)
         logits = self.policy(graph)
         probs = F.softmax(logits, dim=0)
         dist = torch.distributions.Categorical(probs)
@@ -123,12 +141,56 @@ class GNNSolverAgent:
         log_prob = dist.log_prob(action)
         return action.item(), log_prob
 
-    def update(self, log_prob, reward):
-        loss = -log_prob * reward
+    def run_episode(self, maze, start, goal, max_steps=100):
+        pos = start
+        log_probs = []
+        rewards = []
+        path = [pos]
+
+        for _ in range(max_steps):
+            if pos == goal:
+                rewards.append(10.0)
+                break
+            action, log_prob = self.select_action(maze, pos)
+            log_probs.append(log_prob)
+
+            dr, dc = [(-1, 0), (1, 0), (0, -1), (0, 1)][action]
+            nr, nc = pos[0] + dr, pos[1] + dc
+
+            if (0 <= nr < maze.shape[0] and 0 <= nc < maze.shape[1] and maze[nr][nc] == 0):
+                pos = (nr, nc)
+                path.append(pos)
+                rewards.append(-0.01)
+            else:
+                rewards.append(-1.0)
+                break
+
+        return log_probs, rewards, path
+
+
+    def compute_discounted_returns(self, rewards):
+        G = 0
+        returns = []
+        for r in reversed(rewards):
+            G = r + self.gamma * G
+            returns.insert(0, G)
+        returns = torch.tensor(returns, dtype=torch.float32)
+        returns = (returns - returns.mean()) / (returns.std(unbiased=False) + 1e-8)
+        return returns
+
+
+    def update(self, log_probs, rewards):
+        returns = self.compute_discounted_returns(rewards)
+        loss = 0
+        for log_prob, G in zip(log_probs, returns):
+            loss += -log_prob * G
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
+    def get_next_move(self, maze, pos):
+        action, _ = self.select_action(maze, pos)
+        return action
 
 
 
@@ -140,8 +202,22 @@ maze = np.array([
 start = (0, 0)
 goal = (2, 2)
 
-homogeneous_graph = maze_to_homogeneous_graph(maze, start)
-print(homogeneous_graph.x)
-print(homogeneous_graph.edge_index)
-# solver = GNNSolverAgent(lr=0.01)
+# homogeneous_graph = maze_to_homogeneous_graph(maze, start)
+# print(homogeneous_graph.x)
+# print(homogeneous_graph.edge_index)
+solver = GNNSolverAgent(lr=0.01)
 
+try:
+    solver.load()
+    print("Loaded model")
+except FileNotFoundError:
+    print("No saved model found")
+
+for epoch in range(1000):
+    log_probs, rewards, path = solver.run_episode(maze, start, goal)
+    solver.update(log_probs, rewards)
+    if path[-1] == goal:
+        print(f"Reached goal in {len(path)} steps at epoch {epoch}")
+        print("Path:", path)
+        solver.save()
+        break

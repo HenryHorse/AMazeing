@@ -6,91 +6,53 @@ from models.random_mutator import is_solvable
 import networkx as nx
 
 
-def solver_path_length(maze, start=(0, 0), goal=None):
-        if goal is None:
-            goal = (maze.shape[0] - 1, maze.shape[1] - 1)
+from queue import Queue
 
-        G = nx.Graph()
-        rows, cols = maze.shape
-        for r in range(rows):
-            for c in range(cols):
-                if maze[r][c] == 0:
-                    for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                        nr, nc = r + dr, c + dc
-                        if 0 <= nr < rows and 0 <= nc < cols and maze[nr][nc] == 0:
-                            G.add_edge((r, c), (nr, nc))
+def is_solvable(maze, start, goal):
+    rows, cols = maze.shape
+    visited = np.zeros_like(maze)
+    q = Queue()
+    q.put(start)
+    visited[start] = 1
 
-        try:
-            path = nx.shortest_path(G, start, goal)
-            return len(path)
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            return None  # unsolvable
+    while not q.empty():
+        r, c = q.get()
+        if (r, c) == goal:
+            return True
+        for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols:
+                if maze[nr, nc] == 0 and visited[nr, nc] == 0:
+                    visited[nr, nc] = 1
+                    q.put((nr, nc))
+    return False
 
 
-
-class MazeMutationEnv(gym.Env):
-    """
-    Gym environment for training a maze-mutating agent.
-    The agent selects a wall to move to an empty space.
-    Reward is +1 for a valid move (still solvable), -10 if it breaks solvability.
-    """
-    def __init__(self, rows=10, cols=10):
-        super(MazeMutationEnv, self).__init__()
-        self.rows = rows
-        self.cols = cols
-        self.shape = (rows, cols)
-
-        # Observation is the flattened maze (0s and 1s)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(rows * cols,), dtype=np.uint8)
-
-        # Action: (from_index, to_index) as a flat pair
-        self.action_space = spaces.MultiDiscrete([rows * cols, rows * cols])
-
-        self.maze = None
-        self.reset()
-    
+class MazeMutatorEnv(gym.Env):
+    def __init__(self, maze, start, goal):
+        self.maze = maze
+        self.start = start
+        self.goal = goal
+        self.rows, self.cols = maze.shape
+        self.action_space = spaces.Discrete(self.rows * self.cols)
+        self.observation_space = spaces.Box(low=0, high=1, shape=maze.shape, dtype=np.uint8)
 
     def reset(self):
-        self.maze = self._generate_solvable_maze()
-        return self.maze.flatten()
+        self.done = False
+        return self.maze.copy()
 
     def step(self, action):
-        from_idx, to_idx = action
-        from_pos = divmod(from_idx, self.cols)
-        to_pos = divmod(to_idx, self.cols)
-
-        reward = 0
-        done = False
-
-        prev_len = solver_path_length(self.maze)
-    
-        if self.maze[from_pos] == 1 and self.maze[to_pos] == 0:
-            self.maze[from_pos] = 0
-            self.maze[to_pos] = 1
-
-            new_len = solver_path_length(self.maze)
-            if new_len is None:
-                reward = -10
-                self.maze[from_pos] = 1
-                self.maze[to_pos] = 0
-            else:
-                reward = new_len - prev_len  # positive if path got longer
+        r, c = divmod(action, self.cols)
+        if (r, c) == self.start or (r, c) == self.goal:
+            reward = -10
+            self.done = True
+            return self.maze.copy(), reward, self.done, {}
+        
+        # toggle the cell: path <-> wall
+        self.maze[r, c] = 1 - self.maze[r, c]
+        if not is_solvable(self.maze, self.start, self.goal):
+            reward = -10
         else:
-            reward = -1
-
-
-        return self.maze.flatten(), reward, done, {}
-
-    def render(self, mode='human'):
-        for row in self.maze:
-            print("".join([' ' if c == 0 else '#' for c in row]))
-        print()
-
-    def _generate_solvable_maze(self):
-        for _ in range(100):
-            maze = generate_random_maze(self.rows, self.cols)
-            maze[0, 0] = 0
-            maze[self.rows - 1, self.cols - 1] = 0
-            if is_solvable(maze):
-                return maze
-        raise RuntimeError("Failed to generate solvable maze")
+            reward = 0  # actual reward comes from later evaluation
+        self.done = True
+        return self.maze.copy(), reward, self.done, {}
