@@ -6,23 +6,26 @@ import torch_geometric.nn as gnn
 import numpy as np
 
 
-def maze_to_homogeneous_graph(maze, agent_pos):
-    rows, cols = maze.shape
-    num_nodes = rows * cols
 
+def maze_to_homogeneous_graph(maze, agent_pos, start_pos=None, goal_pos=None):
+    rows, cols = maze.shape
     features = []
     edge_index = []
 
-    def flat_idx(row, col):
-        return row * cols + col
+    def flat_idx(r, c):
+        return r * cols + c
 
     for r in range(rows):
         for c in range(cols):
             is_wall = float(maze[r][c] == 1)
             is_agent_here = float((r, c) == agent_pos)
+            is_start = float((r, c) == start_pos) if start_pos else 0.0
+            is_goal = float((r, c) == goal_pos) if goal_pos else 0.0
             features.append([
                 is_wall,
                 is_agent_here,
+                is_start,
+                is_goal,
                 r / rows,
                 c / cols,
             ])
@@ -37,7 +40,7 @@ def maze_to_homogeneous_graph(maze, agent_pos):
                     edge_index.append([u, v])
 
     x = torch.tensor(features, dtype=torch.float32)
-    edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+    edge_index = torch.tensor(edge_index, dtype=torch.long).T.contiguous()
 
     return Data(x=x, edge_index=edge_index)
 
@@ -92,7 +95,7 @@ def maze_to_hetero_graph(maze, agent_pos):
 
 
 class GNNSolverPolicy(nn.Module):
-    def __init__(self, input_dim = 4, hidden_dim=64):
+    def __init__(self, input_dim = 6, hidden_dim=64):
         super().__init__()
         # self.convs = gnn.HeteroConv({
         #     ('cell', 'to', 'cell'): gnn.GATConv(1, hidden_dim, add_self_loops=False),
@@ -132,8 +135,8 @@ class GNNSolverAgent:
         self.policy.load_state_dict(torch.load(self.model_path))
         self.policy.eval()
 
-    def select_action(self, maze, pos):
-        graph = maze_to_homogeneous_graph(maze, pos)
+    def select_action(self, maze, pos, start, goal):
+        graph = maze_to_homogeneous_graph(maze, pos, start, goal)
         logits = self.policy(graph)
         probs = F.softmax(logits, dim=0)
         dist = torch.distributions.Categorical(probs)
@@ -151,7 +154,7 @@ class GNNSolverAgent:
             if pos == goal:
                 rewards.append(10.0)
                 break
-            action, log_prob = self.select_action(maze, pos)
+            action, log_prob = self.select_action(maze, pos, start, goal)
             log_probs.append(log_prob)
 
             dr, dc = [(-1, 0), (1, 0), (0, -1), (0, 1)][action]
@@ -188,8 +191,8 @@ class GNNSolverAgent:
         loss.backward()
         self.optimizer.step()
 
-    def get_next_move(self, maze, pos):
-        action, _ = self.select_action(maze, pos)
+    def get_next_move(self, maze, pos, start, goal):
+        action, _ = self.select_action(maze, pos, start, goal) # we need to fix this too I think
         return action
 
 
