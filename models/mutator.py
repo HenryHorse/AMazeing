@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from models.maze_mutation_env import is_solvable
+from models.random_mutator import is_solvable
 import torch_geometric.nn as gnn
 from torch_geometric.data import HeteroData, Data
 
@@ -145,13 +145,14 @@ class MazeMutatorAgent:
 
 
     def update(self, log_probs, rewards):
+        self.optimizer.zero_grad()
+
         if not log_probs:
             return
         returns = self.compute_discounted_returns(rewards)
         loss = 0
         for log_prob, G in zip(log_probs, returns):
             loss += -log_prob * G
-        self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 

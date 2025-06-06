@@ -1,10 +1,8 @@
 from stable_baselines3 import PPO
 from models.solver import GNNSolverAgent
 from models.mutator import MazeMutatorAgent
-from models.maze_mutation_env import is_solvable
 from models.generator import generate_maze_dfs_backtracker
-
-
+from models.random_mutator import is_solvable
 
 solver = GNNSolverAgent()
 mutator = MazeMutatorAgent()  # now uses the new GNNMutatorPolicy.forward()
@@ -19,16 +17,15 @@ for epoch in range(1000):
 
     # 2) Mutator tries two swaps
     log_probs_mutator = []
-    for _ in range(2):
-        action, log_prob = mutator.select_action(maze, start, start, goal)
-        new_maze = mutator.mutate(maze, action)
-        if is_solvable(new_maze, start, goal):
-            maze = new_maze
-            log_probs_mutator.append(log_prob)
-        else:
-            # Penalize the mutator if it made the maze unsolvable
-            mutator.update([log_prob], [-10.0])
-            break
+
+    action, log_prob = mutator.select_action(maze, start, start, goal)
+    new_maze = mutator.mutate(maze, action)
+    if is_solvable(new_maze, start, goal):
+        maze = new_maze
+        log_probs_mutator.append(log_prob)
+    else:
+        # Penalize the mutator if it made the maze unsolvable
+        mutator.update([log_prob], [-10.0])
 
     # 3) Solver then tries the (possibly mutated) maze
     log_probs_solver, rewards_solver, path = solver.run_episode(maze, start, goal)
