@@ -3,37 +3,38 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch_geometric.nn as gnn
 import numpy as np
-from helpers import maze_to_homogeneous_graph, manhattan_distance
+from helpers import maze_to_homogeneous_graph, manhattan_distance, maze_to_tensor
 from generator import generate_prim_algo
 
 
 
-class GNNSolverPolicy(nn.Module):
-    def __init__(self, input_dim = 6, hidden_dim=64):
+class CNNSolverPolicy(nn.Module):
+    def __init__(self, input_dim = 4, hidden_dim=64):
         super().__init__()
-        self.gcn1 = gnn.GCNConv(input_dim, hidden_dim)
-        self.gcn2 = gnn.GCNConv(hidden_dim, hidden_dim)
-        self.gcn3 = gnn.GCNConv(hidden_dim, hidden_dim)
-        self.gcn4 = gnn.GCNConv(hidden_dim, hidden_dim)
+        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
+
         self.policy_head = nn.Linear(hidden_dim, 4)
         self.value_head = nn.Linear(hidden_dim, 1)
 
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        x = F.relu(self.gcn1(x, edge_index))
-        x = F.relu(self.gcn2(x, edge_index))
-        x = F.relu(self.gcn3(x, edge_index))
-        x = F.relu(self.gcn4(x, edge_index))
-        agent_idx = (data.x[:, 1] == 1.0).nonzero(as_tuple=True)[0]
-        agent_embed = x[agent_idx]
-        logits = self.policy_head(agent_embed).squeeze(0)
-        value = self.value_head(agent_embed).squeeze(0)
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        agent_mask = x[:, 1:2]
+        agent_yx = (agent_mask.squeeze(1) == agent_mask.max()).nonzero()[0][-2:]
+        agent_feature = x[0, :, agent_yx[0], agent_yx[1]]
+
+        logits = self.policy_head(agent_feature).squeeze(0)
+        value = self.value_head(agent_feature).squeeze(0)
         return logits, value
 
 
-class GNNSolverAgent:
-    def __init__(self, lr=3e-4, gamma=0.99, clip_eps=0.2, ppo_epochs=10, model_path="solver2.pt"):
-        self.policy = GNNSolverPolicy()
+class CNNSolverAgent:
+    def __init__(self, lr=3e-4, gamma=0.99, clip_eps=0.2, ppo_epochs=10, model_path="cnn_solver.pt"):
+        self.policy = CNNSolverPolicy()
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr)
         self.gamma = gamma
         self.clip_eps = clip_eps
@@ -47,8 +48,8 @@ class GNNSolverAgent:
         self.policy.load_state_dict(torch.load(self.model_path))
         self.policy.eval()
 
-    def select_action(self, graph, epsilon=0.2):
-        logits, value = self.policy(graph)
+    def select_action(self, maze_tensor, agent_pos):
+        logits, value = self.policy(maze_tensor)
         probs = F.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         action = dist.sample()
@@ -58,14 +59,14 @@ class GNNSolverAgent:
 
     def run_episode(self, maze, start, goal, max_steps=500):
         pos = start
-        graphs, log_probs, values, rewards, actions, entropies, path = [], [], [], [], [], [], [pos]
+        tensors, log_probs, values, rewards, actions, entropies, path = [], [], [], [], [], [], [pos]
 
         for _ in range(max_steps):
-            graph = maze_to_homogeneous_graph(maze, pos, start, goal)
+            maze_tensor = maze_to_tensor(maze, pos, start, goal)
             with torch.no_grad():
-                action, log_prob, value, entropy = self.select_action(graph)
+                action, log_prob, value, entropy = self.select_action(maze_tensor, pos)
 
-            graphs.append(graph)
+            tensors.append(maze_tensor)
             log_probs.append(log_prob)
             values.append(value)
             entropies.append(entropy)
@@ -89,7 +90,7 @@ class GNNSolverAgent:
             else:
                 rewards.append(-0.5)
 
-        return graphs, log_probs, values, rewards, actions, entropies, path
+        return tensors, log_probs, values, rewards, actions, entropies, path
 
 
     def compute_returns_and_advantages(self, rewards, values):
@@ -108,15 +109,15 @@ class GNNSolverAgent:
         return returns, advantages
 
 
-    def update(self, graphs, log_probs, values, rewards, actions, entropies):
+    def update(self, tensors, log_probs, values, rewards, actions, entropies):
         old_log_probs = torch.stack(log_probs).detach()
         returns, advantages = self.compute_returns_and_advantages(rewards, values)
 
 
         for _ in range(self.ppo_epochs):
             new_log_probs, new_values, new_entropies = [], [], []
-            for graph, action in zip(graphs, actions):
-                logits, value = self.policy(graph)
+            for tensor, action in zip(tensors, actions):
+                logits, value = self.policy(tensor)
                 probs = F.softmax(logits, dim=-1)
                 dist = torch.distributions.Categorical(probs)
                 new_log_probs.append(dist.log_prob(action))
@@ -143,8 +144,8 @@ class GNNSolverAgent:
 
 
     def get_next_move(self, maze, pos, start, goal):
-        graph = maze_to_homogeneous_graph(maze, pos, start, goal)
-        logits, _ = self.policy(graph)
+        maze_tensor = maze_to_tensor(maze, pos, start, goal)
+        logits, _ = self.policy(maze_tensor)
         return torch.argmax(F.softmax(logits, dim=-1), dim=-1).item()
 
 
@@ -157,7 +158,7 @@ class GNNSolverAgent:
 # start = (0, 0)
 # goal = (2, 2)
 
-solver = GNNSolverAgent(lr=3e-4)
+solver = CNNSolverAgent(lr=3e-4)
 
 try:
     solver.load()
@@ -170,17 +171,17 @@ batch_timesteps = 1024
 
 for epoch in range(max_epochs):
     batch_data = {
-        'graphs': [], 'log_probs': [], 'values': [], 'rewards': [], 'actions': [], 'entropies': []
+        'tensors': [], 'log_probs': [], 'values': [], 'rewards': [], 'actions': [], 'entropies': []
     }
     batch_returns = []
     episode_lengths = []
     timesteps = 0
     while timesteps < batch_timesteps:
-        maze, start, goal = generate_prim_algo(4, 4)
+        maze, start, goal = generate_prim_algo(7, 7)
         data = solver.run_episode(maze, start, goal)
-        graphs, lp, vals, rews, acts, ents, path = data
+        tensors, lp, vals, rews, acts, ents, path = data
 
-        batch_data['graphs'].extend(graphs)
+        batch_data['tensors'].extend(tensors)
         batch_data['log_probs'].extend(lp)
         batch_data['values'].extend(vals)
         batch_data['rewards'].extend(rews)
@@ -192,7 +193,7 @@ for epoch in range(max_epochs):
         timesteps += len(rews)
 
     actor_loss, critic_loss, entropy_loss = solver.update(
-        batch_data['graphs'], batch_data['log_probs'], batch_data['values'],
+        batch_data['tensors'], batch_data['log_probs'], batch_data['values'],
         batch_data['rewards'], batch_data['actions'], batch_data['entropies']
     )
 
@@ -200,8 +201,6 @@ for epoch in range(max_epochs):
     avg_length = np.mean(episode_lengths)
     success_count = sum(1 for r in batch_returns if r >= 9.0)
     print(f"success_rate: {success_count}/{len(batch_returns)}")
-    if success_count > 5:
-        solver.save()
 
     print(f"Epoch {epoch:4d} | avg_return: {avg_return:.2f} | avg_len: {avg_length:.1f} | "
           f"actor_loss: {actor_loss:.3f} | critic_loss: {critic_loss:.3f} | entropy: {entropy_loss:.3f}")

@@ -5,49 +5,12 @@ import numpy as np
 from models.random_mutator import is_solvable
 import torch_geometric.nn as gnn
 from torch_geometric.data import HeteroData, Data
+from helpers import maze_to_homogeneous_graph
 
 import torch
 torch.autograd.set_detect_anomaly(True)
 
 
-
-
-def maze_to_homogeneous_graph(maze, agent_pos, start_pos=None, goal_pos=None):
-    rows, cols = maze.shape
-    features = []
-    edge_index = []
-
-    def flat_idx(r, c):
-        return r * cols + c
-
-    for r in range(rows):
-        for c in range(cols):
-            is_wall = float(maze[r][c] == 1)
-            is_agent_here = float((r, c) == agent_pos)
-            is_start = float((r, c) == start_pos) if start_pos else 0.0
-            is_goal = float((r, c) == goal_pos) if goal_pos else 0.0
-            features.append([
-                is_wall,
-                is_agent_here,
-                is_start,
-                is_goal,
-                r / rows,
-                c / cols,
-            ])
-
-    for r in range(rows):
-        for c in range(cols):
-            u = flat_idx(r, c)
-            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                nr, nc = r + dr, c + dc
-                if 0 <= nr < rows and 0 <= nc < cols:
-                    v = flat_idx(nr, nc)
-                    edge_index.append([u, v])
-
-    x = torch.tensor(features, dtype=torch.float32)
-    edge_index = torch.tensor(edge_index, dtype=torch.long).T.contiguous()
-
-    return Data(x=x, edge_index=edge_index)
 
 class GNNMutatorPolicy(nn.Module):
     def __init__(self, input_dim=6, hidden_dim=64):

@@ -76,24 +76,40 @@ def generate_prim_algo(num_rows, num_cols):
         num_cols += 1
 
     maze = [[1 for _ in range(num_cols)] for _ in range(num_rows)]
-    last_cell = (0, 0)
+    start = (1, 1)
+    maze[start[0]][start[1]] = 0
 
     cardinal_directions = [(2,0), (-2,0), (0,2), (0,-2)]
 
-    walls = [(1,1,dx,dy) for dx,dy in cardinal_directions]     # add starting node to the list
+    walls = []
+    for dx, dy in cardinal_directions:
+        nx, ny = start[0] + dx, start[1] + dy
+        if 0 <= nx < num_rows and 0 <= ny < num_cols:
+            walls.append((start[0], start[1], dx, dy))
+
+    last_cell = start
+
 
     while walls:
         rand_idx = np.random.choice(len(walls))
         x,y,dx,dy = walls.pop(rand_idx)
         nx,ny = x+dx, y+dy
-        print(f"x: {x}, y: {y}, nx: {nx}, ny:{ny}")
 
         if 0 <= nx < num_rows - 1 and 0 <= ny < num_cols - 1 and maze[nx][ny] == 1:
             maze[nx][ny] = 0    # make a new open cell
             last_cell = (nx,ny)
             maze[x+dx//2][y+dy//2] = 0      # carve path to the new opening
             for new_dx, new_dy in cardinal_directions:
-                walls.append((nx, ny, new_dx, new_dy))
+                nnx, nny = nx + new_dx, ny + new_dy
+                if 0 <= nnx < num_rows and 0 <= nny < num_cols and maze[nnx][nny] == 1:
+                    walls.append((nx, ny, new_dx, new_dy))
 
-    return maze, (1,1), last_cell
+
+    maze = np.array(maze)
+
+    open_cells = [(r,c) for r in range(num_rows) for c in range(num_cols) if maze[r, c] == 0]
+    start, goal = np.random.choice(len(open_cells), size=2, replace=False)
+    start, goal = open_cells[start], open_cells[goal]
+
+    return maze, start, goal
 

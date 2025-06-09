@@ -1,14 +1,21 @@
 from stable_baselines3 import PPO
 from models.solver import GNNSolverAgent
 from models.mutator import MazeMutatorAgent
-from models.generator import generate_maze_dfs_backtracker
+from models.generator import generate_prim_algo
 from models.random_mutator import is_solvable
 
 solver = GNNSolverAgent()
 mutator = MazeMutatorAgent()  # now uses the new GNNMutatorPolicy.forward()
 
+try:
+    solver.load()
+    mutator.load()
+    print("Models loaded")
+except FileNotFoundError:
+    print("No models found, starting training from scratch")
+
 for epoch in range(1000):
-    maze, start, goal = generate_maze_dfs_backtracker(10, 10)
+    maze, start, goal = generate_prim_algo(10, 10)
     maze[start] = maze[goal] = 0
 
     # 1) Get the solver's baseline:
