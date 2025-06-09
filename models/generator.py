@@ -69,7 +69,12 @@ def generate_maze_dfs_backtracker(num_rows, num_cols):
     return np.array(maze)[:num_rows, :num_cols], (1, 1), goal
 
 
-def prim_algo(num_rows, num_cols):
+def generate_prim_algo(num_rows, num_cols):
+    if num_rows % 2 == 0:
+        num_rows += 1
+    if num_cols % 2 == 0:
+        num_cols += 1
+
     maze = [[1 for _ in range(num_cols)] for _ in range(num_rows)]
     last_cell = (0, 0)
 

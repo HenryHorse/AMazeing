@@ -7,7 +7,48 @@ import numpy as np
 
 
 
-def maze_to_homogeneous_graph(maze, agent_pos, start_pos=None, goal_pos=None):
+
+# New maze_to_hetero function that includes the end_position as well into the graph.
+# added is_end_here feature to the node's vector. Simply 2 lines added to old maze-to-hetero function.
+def maze_to_homogeneous_graph(maze, agent_pos, end_pos):
+    rows, cols = maze.shape
+    num_nodes = rows * cols
+
+    features = []
+    edge_index = []
+
+    def flat_idx(row, col):
+        return row * cols + col
+
+    for r in range(rows):
+        for c in range(cols):
+            is_wall = float(maze[r][c] == 1)
+            is_agent_here = float((r, c) == agent_pos)
+            is_end_here = float((r, c) == end_pos)      # this line
+            features.append([
+                is_wall,
+                is_agent_here,
+                is_end_here,         # and this line
+                r / rows,
+                c / cols,
+            ])
+
+    for r in range(rows):
+        for c in range(cols):
+            u = flat_idx(r, c)
+            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < rows and 0 <= nc < cols:
+                    v = flat_idx(nr, nc)
+                    edge_index.append([u, v])
+
+    x = torch.tensor(features, dtype=torch.float32)
+    edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+
+    return Data(x=x, edge_index=edge_index)
+
+# the old version of the converter function without end_position taken into account.
+def old_maze_to_homogeneous_graph(maze, agent_pos, start_pos=None, goal_pos=None):
     rows, cols = maze.shape
     features = []
     edge_index = []
