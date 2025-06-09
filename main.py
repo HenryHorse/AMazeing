@@ -1,10 +1,10 @@
 from models.generator import generate_random_maze, generate_prim_algo
 from models.random_mutator import MazeMutator, is_solvable
-from visualize import run_mutating_visualization
+from visualize import run_mutating_visualization, run_visualization
 
 def generate_solvable_maze(rows, cols, max_attempts=100):
     for _ in range(max_attempts):
-        maze, goal = generate_prim_algo(rows, cols)
+        maze, start, goal = generate_prim_algo(rows, cols)
         if is_solvable(maze, start=(0, 0), goal=goal):
             return maze, goal
     raise RuntimeError("Could not generate a solvable maze after many attempts.")
