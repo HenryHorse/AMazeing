@@ -113,3 +113,9 @@ def generate_prim_algo(num_rows, num_cols):
 
     return maze, start, goal
 
+
+
+rows, cols = 7, 7
+maze, start, goal = generate_prim_algo(rows, cols)
+print(maze)
+

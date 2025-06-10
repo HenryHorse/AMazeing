@@ -87,6 +87,7 @@ def solver_visualization(solver, maze, start, goal):
     running = True
     pos = start
     path = [pos]
+    reached_goal = False
 
     while running:
         for event in pygame.event.get():
@@ -95,19 +96,22 @@ def solver_visualization(solver, maze, start, goal):
 
         draw_maze(screen, maze, rows, cols)
 
-        goal_rect = pygame.Rect(goal[1] * cell_size, goal[0] * cell_size, cell_size, cell_size)
-        pygame.draw.rect(screen, (0, 255, 0), goal_rect)
+
 
         for r, c in path:
             rect = pygame.Rect(c * cell_size, r * cell_size, cell_size, cell_size)
             pygame.draw.rect(screen, (255, 0, 0), rect)
 
+        goal_color = (0, 0, 255) if reached_goal else (0, 255, 0)
+        goal_rect = pygame.Rect(goal[1] * cell_size, goal[0] * cell_size, cell_size, cell_size)
+        pygame.draw.rect(screen, goal_color, goal_rect)
+
         pygame.display.flip()
         time.sleep(0.1)
 
         if pos == goal:
-            print("Reached goal!")
-            break
+            reached_goal = True
+            continue
 
         next_action = solver.get_next_move(maze, pos, start, goal)
         dr, dc = [(-1, 0), (1, 0), (0, -1), (0, 1)][next_action]
@@ -118,8 +122,11 @@ def solver_visualization(solver, maze, start, goal):
             path.append(pos)
         else:
             print("Invalid move")
+            pygame.quit()
+            return False
 
         clock.tick(60)
 
     pygame.quit()
+    return reached_goal
 

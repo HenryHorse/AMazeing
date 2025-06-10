@@ -4,6 +4,17 @@ import torch
 
 
 
+def get_valid_action_mask(maze, pos):
+    r, c = pos
+    moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    mask = []
+    for dr, dc in moves:
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < maze.shape[0] and 0 <= nc < maze.shape[1] and maze[nr][nc] == 0:
+            mask.append(True)
+        else:
+            mask.append(False)
+    return torch.tensor(mask, dtype=torch.bool)
 
 def manhattan_distance(p1, p2):
     return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
