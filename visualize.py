@@ -1,6 +1,7 @@
 import pygame
 import time
-
+from models.random_mutator import maze_to_graph
+import networkx as nx
 
 def draw_maze(screen, maze, rows, cols):
     width, height = screen.get_size()
@@ -89,6 +90,13 @@ def solver_visualization(solver, maze, start, goal):
     path = [pos]
     reached_goal = False
 
+    try:
+        G = maze_to_graph(maze)
+        astar_path = nx.astar_path(G, start, goal, heuristic=lambda a, b: abs(a[0]-b[0] + abs(a[1]-b[1])))
+    except Exception as e:
+        print("A* failed", e)
+        astar_path = []
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -97,10 +105,15 @@ def solver_visualization(solver, maze, start, goal):
         draw_maze(screen, maze, rows, cols)
 
 
-
-        for r, c in path:
+        for r, c in astar_path:
             rect = pygame.Rect(c * cell_size, r * cell_size, cell_size, cell_size)
-            pygame.draw.rect(screen, (255, 0, 0), rect)
+            pygame.draw.rect(screen, (0, 255, 255), rect)
+
+        for i, (r, c) in enumerate(path):
+            intensity = int(100 + 155 * (i / len(path)))
+            color = (intensity, 0, 0)
+            rect = pygame.Rect(c * cell_size, r * cell_size, cell_size, cell_size)
+            pygame.draw.rect(screen, color, rect)
 
         goal_color = (0, 0, 255) if reached_goal else (0, 255, 0)
         goal_rect = pygame.Rect(goal[1] * cell_size, goal[0] * cell_size, cell_size, cell_size)
