@@ -15,13 +15,13 @@ def generate_solvable_maze(rows, cols, max_attempts=100):
 
 def main():
     rows, cols = 23, 23
-    mutator = TrueRandomMutator()
-    #mutator = CNNUniqueMutatorAgent(rows, cols, model_path="cnn_mutator_new.pt")
-    #try:
-    #    mutator.load()
-    #    print("Loaded trained PPO mutator.")
-    #except FileNotFoundError:
-    #    print("No pretrained mutator found; running with random initialization.")
+    #mutator = SimpleHeuristicMutator()
+    mutator = CNNUniqueMutatorAgent(rows, cols, model_path="cnn_mutator_new.pt")
+    try:
+        mutator.load()
+        print("Loaded trained PPO mutator.")
+    except FileNotFoundError:
+        print("No pretrained mutator found; running with random initialization.")
 
 
     solver = GNNSolverAgent()
@@ -32,7 +32,7 @@ def main():
     solved = False
     while not solved:
         maze, start, goal = generate_solvable_maze(rows, cols)
-        solved = Astar_and_mutator_visualization(mutator, maze, start, goal)
+        solved = Astar_and_PPOmutator_visualization(mutator, maze, start, goal)
 
 
 if __name__ == "__main__":

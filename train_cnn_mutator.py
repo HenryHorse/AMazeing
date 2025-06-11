@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 from models.CNN_mutator import CNNUniqueMutatorAgent, shortest_path_length
 from models.generator   import generate_prim_algo
@@ -8,10 +9,11 @@ from models.random_mutator import is_solvable
 # ──────────────────────────── Hyperparameters ────────────────────────────
 MAX_SIZE   = 23
 BATCH_SIZE = 256
-MAX_EPOCHS = 10000
+MAX_EPOCHS = 100000
 
 # Curriculum: 200 epochs @ 7×7, 200 @ 11×11, 200 @ 15×15, rest @ 23×23
-size_schedule = [5]*300 + [7]*300 + [11]*300 + [15]*300 + [19]*300 + [MAX_SIZE]*(MAX_EPOCHS - 1500)
+size_schedule = [5]*1000 + [7]*1000 + [11]*1000 + [15]*1000 + [19]*1000 + [MAX_SIZE]*(MAX_EPOCHS - 5000)
+avg_rewards = []  # store avg_reward each epoch
 
 # ─────────────────────── Agent Instantiation ───────────────────────
 agent = CNNUniqueMutatorAgent(
@@ -90,9 +92,20 @@ for epoch in range(MAX_EPOCHS):
 
     # 7) Logging
     avg_r = torch.stack(batch_rewards).float().mean().item()
+    avg_rewards.append(avg_r)
     print(f"Epoch {epoch:4d} | size {size:2d}×{size:2d} | avg_reward {avg_r:+.3f}")
 
     # 8) Checkpoint
     if epoch % 10 == 0:
         agent.save()
         print("  ↪ Saved checkpoint")
+
+        # Plot avg_reward curve so far
+        plt.figure()
+        plt.plot(avg_rewards, label="Avg Reward")
+        plt.xlabel("Epoch")
+        plt.ylabel("Average Reward")
+        plt.title("PPO Mutator Training Progress")
+        plt.legend()
+        plt.savefig("mutator_training_curve.png")
+        plt.close()
